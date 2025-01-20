@@ -31,4 +31,90 @@ struct siwx917_dev {
 #endif
 };
 
+enum wifi_link_mode get_sl_wifi_protocol_name(sl_wifi_rate_protocol_t rate_protocol)
+{
+	switch (rate_protocol) {
+	case SL_WIFI_RATE_PROTOCOL_B_ONLY:
+		return WIFI_1;
+	case SL_WIFI_RATE_PROTOCOL_G_ONLY:
+		return WIFI_3;
+	case SL_WIFI_RATE_PROTOCOL_N_ONLY:
+		return WIFI_4;
+	case SL_WIFI_RATE_PROTOCOL_AC_ONLY:
+		return WIFI_5;
+	case SL_WIFI_RATE_PROTOCOL_AX_ONLY:
+		return WIFI_6;
+	default:
+		return WIFI_LINK_MODE_UNKNOWN;
+	}
+}
+
+int get_sl_wifi_rate_kbps(sl_wifi_rate_t mask)
+{
+    switch (mask) {
+	case SL_WIFI_AUTO_RATE:
+	/* AUTO rate doesn't have a specific value */
+		return 0;
+	case SL_WIFI_RATE_11B_1:
+		return 1000;
+	case SL_WIFI_RATE_11B_2:
+		return 2000;
+	case SL_WIFI_RATE_11B_5_5:
+		return 5500;
+	case SL_WIFI_RATE_11B_11:
+		return 11000;
+	case SL_WIFI_RATE_11G_6:
+		return 6000;
+        case SL_WIFI_RATE_11G_9:
+		return 9000;
+	case SL_WIFI_RATE_11G_12:
+		return 12000;
+	case SL_WIFI_RATE_11G_18:
+		return 18000;
+	case SL_WIFI_RATE_11G_24:
+		return 24000;
+	case SL_WIFI_RATE_11G_36:
+		return 36000;
+	case SL_WIFI_RATE_11G_48:
+		return 48000;
+	case SL_WIFI_RATE_11G_54:
+		return 54000;
+	case SL_WIFI_RATE_11N_MCS0:
+		return 72000;
+	case SL_WIFI_RATE_11N_MCS1:
+		return 14400;
+	case SL_WIFI_RATE_11N_MCS2:
+		return 21700;
+	case SL_WIFI_RATE_11N_MCS3:
+		return 28900;
+	case SL_WIFI_RATE_11N_MCS4:
+		return 43300;
+	case SL_WIFI_RATE_11N_MCS5:
+		return 57800;
+	case SL_WIFI_RATE_11N_MCS6:
+		return 65000;
+	case SL_WIFI_RATE_11N_MCS7:
+		return 72200;
+	case SL_WIFI_RATE_11AX_MCS0:
+		return 86000;
+	case SL_WIFI_RATE_11AX_MCS1:
+		return 17200;
+	case SL_WIFI_RATE_11AX_MCS2:
+		return 25800;
+	case SL_WIFI_RATE_11AX_MCS3:
+		return 34400;
+	case SL_WIFI_RATE_11AX_MCS4:
+		return 51600;
+	case SL_WIFI_RATE_11AX_MCS5:
+		return 68800;
+	case SL_WIFI_RATE_11AX_MCS6:
+		return 77400;
+	case SL_WIFI_RATE_11AX_MCS7:
+		return 86000;
+	default:
+		/* unknown rate */
+		return -1;
+	}
+}
+
 #endif

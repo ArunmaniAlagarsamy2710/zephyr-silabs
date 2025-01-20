@@ -32,6 +32,12 @@ config WIFI_SIWX917_NET_STACK_OFFLOAD
 
 endchoice
 
+config WIFI_SIWX917_AP_MODE
+    bool "Enable AP Mode"
+    help
+      Enable this option to allow the device to operate in
+      Access Point (AP) mode instead of the default Station (STA) mode.
+
 config NET_TCP_WORKQ_STACK_SIZE
 	default 2048
 
