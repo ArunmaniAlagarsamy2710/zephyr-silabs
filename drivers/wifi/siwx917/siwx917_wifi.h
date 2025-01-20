@@ -14,9 +14,12 @@
 #include "sl_si91x_socket_types.h"
 #include "sl_si91x_protocol_types.h"
 
+#define GET_INTERFACE (0x03)
+
 struct siwx917_dev {
 	struct net_if *iface;
 	sl_mac_address_t macaddr;
+	sl_wifi_interface_t interface;
 	enum wifi_iface_state state;
 	scan_result_cb_t scan_res_cb;
 

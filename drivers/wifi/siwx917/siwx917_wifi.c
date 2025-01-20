@@ -17,10 +17,79 @@
 #include "sl_wifi_callback_framework.h"
 #include "sl_wifi.h"
 #include "sl_net.h"
+#include "sl_net_default_values.h"
 
 LOG_MODULE_REGISTER(siwx917_wifi);
 
 NET_BUF_POOL_FIXED_DEFINE(siwx917_tx_pool, 1, _NET_ETH_MAX_FRAME_SIZE, 0, NULL);
+
+int get_sl_wifi_rate_mbps(sl_wifi_rate_t mask)
+{
+	switch (mask) {
+	case SL_WIFI_AUTO_RATE:
+		/* AUTO rate doesn't have a specific value */
+		return 0;
+	case SL_WIFI_RATE_11B_1:
+		return 1;
+	case SL_WIFI_RATE_11B_2:
+		return 2;
+	case SL_WIFI_RATE_11B_5_5:
+		return 5;
+	case SL_WIFI_RATE_11B_11:
+		return 11;
+	case SL_WIFI_RATE_11G_6:
+		return 6;
+	case SL_WIFI_RATE_11G_9:
+		return 9;
+	case SL_WIFI_RATE_11G_12:
+		return 12;
+	case SL_WIFI_RATE_11G_18:
+		return 18;
+	case SL_WIFI_RATE_11G_24:
+		return 24;
+	case SL_WIFI_RATE_11G_36:
+		return 36;
+	case SL_WIFI_RATE_11G_48:
+		return 48;
+	case SL_WIFI_RATE_11G_54:
+		return 54;
+	case SL_WIFI_RATE_11N_MCS0:
+		return 7;
+	case SL_WIFI_RATE_11N_MCS1:
+		return 14;
+	case SL_WIFI_RATE_11N_MCS2:
+		return 21;
+	case SL_WIFI_RATE_11N_MCS3:
+		return 28;
+	case SL_WIFI_RATE_11N_MCS4:
+		return 43;
+	case SL_WIFI_RATE_11N_MCS5:
+		return 57;
+	case SL_WIFI_RATE_11N_MCS6:
+		return 65;
+	case SL_WIFI_RATE_11N_MCS7:
+		return 72;
+	case SL_WIFI_RATE_11AX_MCS0:
+		return 8;
+	case SL_WIFI_RATE_11AX_MCS1:
+		return 17;
+	case SL_WIFI_RATE_11AX_MCS2:
+		return 25;
+	case SL_WIFI_RATE_11AX_MCS3:
+		return 34;
+	case SL_WIFI_RATE_11AX_MCS4:
+		return 51;
+	case SL_WIFI_RATE_11AX_MCS5:
+		return 68;
+	case SL_WIFI_RATE_11AX_MCS6:
+		return 77;
+	case SL_WIFI_RATE_11AX_MCS7:
+		return 86;
+	default:
+		/* unknown rate */
+		return -1;
+	}
+}
 
 static unsigned int siwx917_on_join(sl_wifi_event_t event,
 				    char *result, uint32_t result_size, void *arg)
@@ -225,13 +294,79 @@ static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_sca
 static int siwx917_status(const struct device *dev, struct wifi_iface_status *status)
 {
 	struct siwx917_dev *sidev = dev->data;
+	sl_si91x_rsp_wireless_info_t info = {};
+	sl_wifi_rate_t mask = {0};
+	int ret;
 	int32_t rssi = -1;
 
 	memset(status, 0, sizeof(*status));
 	status->state = sidev->state;
-	sl_wifi_get_signal_strength(SL_WIFI_CLIENT_INTERFACE, &rssi);
-	status->rssi = rssi;
-	return 0;
+
+	ret = sl_wifi_get_wireless_info(&info);
+	if (ret) {
+		LOG_ERR("Failed to get the wireless info: 0x%x", ret);
+		return -ENOTSUP;
+	}
+
+	strncpy(status->ssid, info.ssid, WIFI_SSID_MAX_LEN);
+	status->ssid_len = strnlen(info.ssid, WIFI_SSID_MAX_LEN);
+	status->ssid[status->ssid_len] = '\0';
+	memcpy(status->bssid, info.mac_address, WIFI_MAC_ADDR_LEN);
+	status->mfp = WIFI_MFP_REQUIRED;
+
+	if (sidev->interface & SL_WIFI_2_4GHZ_INTERFACE) {
+		status->band = WIFI_FREQ_BAND_2_4_GHZ;
+	}
+
+	if (sidev->interface & SL_WIFI_CLIENT_INTERFACE) {
+		sl_wifi_listen_interval_t listen_interval = {};
+
+		status->link_mode = WIFI_LINK_MODE_UNKNOWN;
+		status->iface_mode = WIFI_MODE_INFRA;
+		status->channel = info.channel_number;
+		sl_wifi_get_signal_strength(SL_WIFI_CLIENT_INTERFACE, &rssi);
+		status->rssi = rssi;
+
+		sl_wifi_get_listen_interval(SL_WIFI_CLIENT_INTERFACE, &listen_interval);
+		status->beacon_interval = listen_interval.listen_interval;
+
+		get_saved_sl_wifi_rate(&mask);
+		status->current_phy_tx_rate = get_sl_wifi_rate_mbps(mask);
+	} else if (sidev->interface & SL_WIFI_AP_INTERFACE) {
+		sl_wifi_ap_configuration_t conf = {};
+
+		ret = sl_wifi_get_ap_configuration(SL_WIFI_AP_INTERFACE, &conf);
+		if (ret) {
+			LOG_ERR("Failed to get the AP configuration: 0x%x", ret);
+			return -EINVAL;
+		}
+
+		status->link_mode = WIFI_4;
+		status->iface_mode = WIFI_MODE_AP;
+		status->channel = conf.channel.channel;
+		status->beacon_interval = conf.beacon_interval;
+		status->dtim_period = conf.dtim_beacon_count;
+	} else {
+		status->link_mode = WIFI_LINK_MODE_UNKNOWN;
+		status->iface_mode = WIFI_MODE_UNKNOWN;
+		status->channel = 0;
+	}
+
+	switch (info.sec_type) {
+	case SL_WIFI_OPEN:
+		status->security = WIFI_SECURITY_TYPE_NONE;
+		break;
+	case SL_WIFI_WPA2:
+		status->security = WIFI_SECURITY_TYPE_PSK;
+		break;
+	case SL_WIFI_WPA3:
+		status->security = WIFI_SECURITY_TYPE_SAE;
+		break;
+	default:
+		status->security = WIFI_SECURITY_TYPE_UNKNOWN;
+	}
+
+	return ret;
 }
 
 #ifdef CONFIG_WIFI_SIWX917_NET_STACK_NATIVE
@@ -311,6 +446,171 @@ static void siwx917_ethernet_init(struct net_if *iface)
 	}
 }
 
+#ifdef CONFIG_WIFI_SIWX917_AP_MODE
+static int siwx917_ap_enable(const struct device *dev, struct wifi_connect_req_params *params)
+{
+	struct siwx917_dev *sidev = dev->data;
+	int ret;
+
+	sl_wifi_ap_configuration_t configuration = {
+		.channel = {
+				.bandwidth = SL_WIFI_AUTO_BANDWIDTH,
+				.channel = (params->channel == WIFI_CHANNEL_ANY)
+						   ? SL_WIFI_AUTO_CHANNEL
+						   : params->channel,
+				.band = (params->band == WIFI_FREQ_BAND_2_4_GHZ)
+						? SL_WIFI_BAND_2_4GHZ
+						: SL_WIFI_AUTO_BAND,
+			},
+		.encryption = SL_WIFI_CCMP_ENCRYPTION,
+		.rate_protocol = SL_WIFI_RATE_PROTOCOL_AUTO,
+		.options = 0,
+		.credential_id = SL_NET_DEFAULT_WIFI_AP_CREDENTIAL_ID,
+		.keepalive_type = SL_SI91X_AP_NULL_BASED_KEEP_ALIVE,
+		.beacon_interval = CONFIG_BEACON_INTERVAL,
+		.client_idle_timeout = 0xFF,
+		.dtim_beacon_count = CONFIG_DTIM_BEACON_COUNT,
+		.maximum_clients = CONFIG_WIFI_MAX_STATIONS,
+		.beacon_stop = 0,
+		.tdi_flags = SL_WIFI_TDI_NONE,
+		.is_11n_enabled = 1,
+		.ssid = {
+				.length = params->ssid_length,
+			},
+	};
+
+	strncpy(configuration.ssid.value, params->ssid, params->ssid_length);
+
+	switch (params->security) {
+	case WIFI_SECURITY_TYPE_NONE:
+		configuration.security = SL_WIFI_OPEN;
+		break;
+
+	case WIFI_SECURITY_TYPE_PSK:
+		configuration.security = SL_WIFI_WPA2;
+		sl_net_wifi_psk_credential_entry_t wifi_ap_credential = {
+			.type = SL_NET_WIFI_PSK, .data_length = params->psk_length};
+
+		strncpy(wifi_ap_credential.data, params->psk, params->psk_length);
+
+		ret = sl_net_set_credential(SL_NET_DEFAULT_WIFI_AP_CREDENTIAL_ID,
+					    wifi_ap_credential.type, &wifi_ap_credential.data,
+					    wifi_ap_credential.data_length);
+		if (ret) {
+			LOG_ERR("Failed to set credentials: 0x%x", ret);
+			return -EINVAL;
+		}
+
+		configuration.credential_id = SL_NET_DEFAULT_WIFI_AP_CREDENTIAL_ID;
+		break;
+	default:
+		LOG_ERR("Unsupported security type");
+		return -EINVAL;
+	}
+
+	ret = sl_wifi_start_ap(SL_WIFI_AP_2_4GHZ_INTERFACE, &configuration);
+	if (ret) {
+		LOG_ERR("Failed to enable AP mode: 0x%x", ret);
+		return -EIO;
+	}
+
+	sidev->state = WIFI_STATE_COMPLETED;
+	return ret;
+}
+
+static int siwx917_ap_disable(const struct device *dev)
+{
+	struct siwx917_dev *sidev = dev->data;
+	int ret;
+
+	ret = sl_wifi_stop_ap(SL_WIFI_AP_2_4GHZ_INTERFACE);
+	if (ret) {
+		LOG_ERR("Failed to disable Wi-Fi AP mode: 0x%x", ret);
+		return -EIO;
+	}
+
+	sidev->state = WIFI_STATE_INTERFACE_DISABLED;
+	return ret;
+}
+
+static int siwx917_ap_sta_disconnect(const struct device *dev, const uint8_t *mac_addr)
+{
+	sl_mac_address_t mac = {};
+	int ret;
+
+	if (!mac_addr) {
+		return -EINVAL;
+	}
+
+	strncpy(mac.octet, mac_addr, sizeof(mac.octet));
+
+	ret = sl_wifi_disconnect_ap_client(SL_WIFI_AP_2_4GHZ_INTERFACE, &mac, SL_WIFI_DEAUTH);
+	if (ret) {
+		LOG_ERR("Failed	to disconnect: 0x%x", ret);
+		return -EIO;
+	}
+
+	return ret;
+}
+
+static sl_status_t ap_connected_event_handler(sl_wifi_event_t event, void *data,
+					      uint32_t data_length, void *arg)
+{
+	ARG_UNUSED(event);
+
+	struct siwx917_dev *sidev = arg;
+	struct wifi_ap_sta_info sta_info = {};
+
+	strncpy(sta_info.mac, (uint8_t *)data, data_length);
+	sta_info.mac_length = data_length;
+	sta_info.link_mode = WIFI_LINK_MODE_UNKNOWN;
+
+	wifi_mgmt_raise_ap_sta_connected_event(sidev->iface, &sta_info);
+
+	return SL_STATUS_OK;
+}
+
+static sl_status_t ap_disconnected_event_handler(sl_wifi_event_t event, void *data,
+						 uint32_t data_length, void *arg)
+{
+	ARG_UNUSED(event);
+
+	struct siwx917_dev *sidev = arg;
+	struct wifi_ap_sta_info sta_info = {};
+
+	memcpy(sta_info.mac, (uint8_t *)data, data_length);
+	sta_info.mac_length = data_length;
+	wifi_mgmt_raise_ap_sta_disconnected_event(sidev->iface, &sta_info);
+
+	return SL_STATUS_OK;
+}
+#endif
+
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+static int siwx917_wifi_stats(const struct device *dev, struct net_stats_wifi *stats)
+{
+	struct siwx917_dev *sidev = dev->data;
+	sl_wifi_statistics_t statistics = {};
+	int ret;
+
+	ret = sl_wifi_get_statistics((sidev->interface & GET_INTERFACE), &statistics);
+	if (ret) {
+		LOG_ERR("Failed to get stat: 0x%x", ret);
+		return -EINVAL;
+	}
+
+	stats->multicast.rx = statistics.mcast_rx_count;
+	stats->multicast.tx = statistics.mcast_tx_count;
+	stats->unicast.rx = statistics.ucast_rx_count;
+	stats->unicast.tx = statistics.ucast_tx_count;
+	stats->sta_mgmt.beacons_rx = statistics.beacon_rx_count;
+	stats->sta_mgmt.beacons_miss = statistics.beacon_lost_count;
+	stats->overrun_count = statistics.overrun_count;
+
+	return ret;
+}
+#endif
+
 static void siwx917_iface_init(struct net_if *iface)
 {
 	struct siwx917_dev *sidev = iface->if_dev->dev->data;
@@ -322,7 +622,14 @@ static void siwx917_iface_init(struct net_if *iface)
 	sl_wifi_set_scan_callback(siwx917_on_scan, sidev);
 	sl_wifi_set_join_callback(siwx917_on_join, sidev);
 
-	status = sl_wifi_get_mac_address(SL_WIFI_CLIENT_INTERFACE, &sidev->macaddr);
+	sidev->interface = sl_wifi_get_default_interface();
+
+#ifdef CONFIG_WIFI_SIWX917_AP_MODE
+	sl_wifi_set_callback(SL_WIFI_CLIENT_CONNECTED_EVENTS, ap_connected_event_handler, sidev);
+	sl_wifi_set_callback(SL_WIFI_CLIENT_DISCONNECTED_EVENTS, ap_disconnected_event_handler,
+			     sidev);
+#endif
+	status = sl_wifi_get_mac_address((sidev->interface & GET_INTERFACE), &sidev->macaddr);
 	if (status) {
 		LOG_ERR("sl_wifi_get_mac_address(): %#04x", status);
 		return;
@@ -344,7 +651,16 @@ static const struct wifi_mgmt_ops siwx917_mgmt = {
 	.scan         = siwx917_scan,
 	.connect      = siwx917_connect,
 	.disconnect   = siwx917_disconnect,
+
+#ifdef CONFIG_WIFI_SIWX917_AP_MODE
+	.ap_enable = siwx917_ap_enable,
+	.ap_disable = siwx917_ap_disable,
+	.ap_sta_disconnect = siwx917_ap_sta_disconnect,
+#endif
 	.iface_status = siwx917_status,
+#if defined(CONFIG_NET_STATISTICS_WIFI)
+	.get_stats = siwx917_wifi_stats,
+#endif
 };
 
 static const struct net_wifi_mgmt_offload siwx917_api = {

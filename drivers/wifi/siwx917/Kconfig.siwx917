@@ -32,6 +32,33 @@ config WIFI_SIWX917_NET_STACK_OFFLOAD
 
 endchoice
 
+config WIFI_SIWX917_AP_MODE
+	bool "Enable AP Mode"
+	help
+	 Enable this option to allow the device to operate in
+	 Access Point (AP) mode instead of the default Station (STA) mode.
+
+config WIFI_MAX_STATIONS
+	int "Maximum number of stations supported by AP"
+	range 1 16
+	default 3
+	help
+	 Sets the maximum number of stations that the Access Point (AP) can support.
+
+config BEACON_INTERVAL
+	int "Beacon interval (in milliseconds)"
+	range 100 1000
+	default 100
+	help
+	 Defines the interval between beacon transmissions in AP mode.
+
+config DTIM_BEACON_COUNT
+	int "DTIM beacon count"
+	default 3
+	help
+	 Specifies the Delivery Traffic Indication Message (DTIM) count.
+	 This value determines how often DTIM beacons are sent.
+
 config NET_TCP_WORKQ_STACK_SIZE
 	default 2048
 

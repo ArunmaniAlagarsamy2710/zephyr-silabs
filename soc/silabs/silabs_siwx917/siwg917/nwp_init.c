@@ -25,7 +25,11 @@ static int siwx917_nwp_init(void)
 		.band = SL_SI91X_WIFI_BAND_2_4GHZ,
 		.region_code = DEFAULT_REGION,
 		.boot_config = {
+#ifdef CONFIG_WIFI_SIWX917_AP_MODE
+			.oper_mode = SL_SI91X_ACCESS_POINT_MODE,
+#else
 			.oper_mode = SL_SI91X_CLIENT_MODE,
+#endif
 			.tcp_ip_feature_bit_map = SL_SI91X_TCP_IP_FEAT_EXTENSION_VALID,
 			.ext_tcp_ip_feature_bit_map = SL_SI91X_CONFIG_FEAT_EXTENSION_VALID,
 			.config_feature_bit_map = SL_SI91X_ENABLE_ENHANCED_MAX_PSP,
