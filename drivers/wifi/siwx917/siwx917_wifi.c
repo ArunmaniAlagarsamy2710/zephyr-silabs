@@ -197,6 +197,7 @@ static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_sca
 {
 	sl_wifi_scan_configuration_t sl_scan_config = { 0 };
 	struct siwx917_dev *sidev = dev->data;
+	sl_wifi_ssid_t direct_ssid = { 0 };
 	int ret;
 
 	if (sidev->state != WIFI_STATE_INACTIVE) {
@@ -211,7 +212,15 @@ static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_sca
 	memset(sl_scan_config.channel_bitmap_5g, 0xFF, sizeof(sl_scan_config.channel_bitmap_5g));
 
 	sidev->scan_res_cb = cb;
-	ret = sl_wifi_start_scan(SL_WIFI_CLIENT_INTERFACE, NULL, &sl_scan_config);
+
+#if (CONFIG_WIFI_MGMT_SCAN_SSID_FILT_MAX > 0)
+	if (z_scan_config->ssids[0]) {
+		strncpy(direct_ssid.value, z_scan_config->ssids[0], WIFI_SSID_MAX_LEN);
+		direct_ssid.length = strlen(z_scan_config->ssids[0]);
+	}
+#endif
+	ret = sl_wifi_start_scan(SL_WIFI_CLIENT_INTERFACE, (direct_ssid.length > 0) ?
+						&direct_ssid : NULL, &sl_scan_config);
 	if (ret != SL_STATUS_IN_PROGRESS) {
 		return -EIO;
 	}
