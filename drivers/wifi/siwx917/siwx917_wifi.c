@@ -195,7 +195,7 @@ static unsigned int siwx917_on_scan(sl_wifi_event_t event, sl_wifi_scan_result_t
 static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_scan_config,
 			scan_result_cb_t cb)
 {
-	sl_wifi_scan_configuration_t sl_scan_config = { };
+	sl_wifi_scan_configuration_t sl_scan_config = { 0 };
 	struct siwx917_dev *sidev = dev->data;
 	int ret;
 
@@ -203,8 +203,10 @@ static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_sca
 		return -EBUSY;
 	}
 
-	/* FIXME: fill sl_scan_config with values from z_scan_config */
-	sl_scan_config.type = SL_WIFI_SCAN_TYPE_ACTIVE;
+	if (z_scan_config) {
+		sl_scan_config.type = z_scan_config->scan_type;
+	}
+
 	sl_scan_config.channel_bitmap_2g4 = 0xFFFF;
 	memset(sl_scan_config.channel_bitmap_5g, 0xFF, sizeof(sl_scan_config.channel_bitmap_5g));
 
