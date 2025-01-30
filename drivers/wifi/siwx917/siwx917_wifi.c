@@ -100,7 +100,7 @@ static unsigned int siwx917_on_join(sl_wifi_event_t event,
 		/* TODO: report the real reason of failure */
 		wifi_mgmt_raise_connect_result_event(sidev->iface, WIFI_STATUS_CONN_FAIL);
 		sidev->state = WIFI_STATE_INACTIVE;
-		return 0;
+		return SL_STATUS_OK;
 	}
 
 	wifi_mgmt_raise_connect_result_event(sidev->iface, WIFI_STATUS_CONN_SUCCESS);
@@ -113,7 +113,7 @@ static unsigned int siwx917_on_join(sl_wifi_event_t event,
 	siwx917_on_join_ipv4(sidev);
 	siwx917_on_join_ipv6(sidev);
 
-	return 0;
+	return SL_STATUS_OK;
 }
 
 static int siwx917_connect(const struct device *dev, struct wifi_connect_req_params *params)
@@ -186,7 +186,7 @@ static int siwx917_connect(const struct device *dev, struct wifi_connect_req_par
 
 	ret = sl_wifi_connect(SL_WIFI_CLIENT_INTERFACE, &wifi_config, 0);
 	if (ret != SL_STATUS_IN_PROGRESS) {
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	return 0;
@@ -199,7 +199,7 @@ static int siwx917_disconnect(const struct device *dev)
 
 	ret = sl_wifi_disconnect(SL_WIFI_CLIENT_INTERFACE);
 	if (ret) {
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 	if (IS_ENABLED(CONFIG_WIFI_SIWX917_NET_STACK_NATIVE)) {
 		net_eth_carrier_off(sidev->iface);
@@ -284,7 +284,7 @@ static int siwx917_scan(const struct device *dev, struct wifi_scan_params *z_sca
 	sidev->scan_res_cb = cb;
 	ret = sl_wifi_start_scan(SL_WIFI_CLIENT_INTERFACE, NULL, &sl_scan_config);
 	if (ret != SL_STATUS_IN_PROGRESS) {
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 	sidev->state = WIFI_STATE_SCANNING;
 
@@ -305,7 +305,7 @@ static int siwx917_status(const struct device *dev, struct wifi_iface_status *st
 	ret = sl_wifi_get_wireless_info(&info);
 	if (ret) {
 		LOG_ERR("Failed to get the wireless info: 0x%x", ret);
-		return -ENOTSUP;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	strncpy(status->ssid, info.ssid, WIFI_SSID_MAX_LEN);
@@ -338,7 +338,7 @@ static int siwx917_status(const struct device *dev, struct wifi_iface_status *st
 		ret = sl_wifi_get_ap_configuration(SL_WIFI_AP_INTERFACE, &conf);
 		if (ret) {
 			LOG_ERR("Failed to get the AP configuration: 0x%x", ret);
-			return -EINVAL;
+			return ERROR_CODE_CHECK(ret);
 		}
 
 		status->link_mode = WIFI_4;
@@ -393,7 +393,7 @@ static int siwx917_send(const struct device *dev, struct net_pkt *pkt)
 
 	ret = sl_wifi_send_raw_data_frame(SL_WIFI_CLIENT_INTERFACE, buf->data, pkt_len);
 	if (ret) {
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	net_pkt_unref(pkt);
@@ -498,7 +498,7 @@ static int siwx917_ap_enable(const struct device *dev, struct wifi_connect_req_p
 					    wifi_ap_credential.data_length);
 		if (ret) {
 			LOG_ERR("Failed to set credentials: 0x%x", ret);
-			return -EINVAL;
+			return ERROR_CODE_CHECK(ret);
 		}
 
 		configuration.credential_id = SL_NET_DEFAULT_WIFI_AP_CREDENTIAL_ID;
@@ -511,7 +511,7 @@ static int siwx917_ap_enable(const struct device *dev, struct wifi_connect_req_p
 	ret = sl_wifi_start_ap(SL_WIFI_AP_2_4GHZ_INTERFACE, &configuration);
 	if (ret) {
 		LOG_ERR("Failed to enable AP mode: 0x%x", ret);
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	sidev->state = WIFI_STATE_COMPLETED;
@@ -526,7 +526,7 @@ static int siwx917_ap_disable(const struct device *dev)
 	ret = sl_wifi_stop_ap(SL_WIFI_AP_2_4GHZ_INTERFACE);
 	if (ret) {
 		LOG_ERR("Failed to disable Wi-Fi AP mode: 0x%x", ret);
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	sidev->state = WIFI_STATE_INTERFACE_DISABLED;
@@ -547,7 +547,7 @@ static int siwx917_ap_sta_disconnect(const struct device *dev, const uint8_t *ma
 	ret = sl_wifi_disconnect_ap_client(SL_WIFI_AP_2_4GHZ_INTERFACE, &mac, SL_WIFI_DEAUTH);
 	if (ret) {
 		LOG_ERR("Failed	to disconnect: 0x%x", ret);
-		return -EIO;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	return ret;
@@ -596,7 +596,7 @@ static int siwx917_wifi_stats(const struct device *dev, struct net_stats_wifi *s
 	ret = sl_wifi_get_statistics((sidev->interface & GET_INTERFACE), &statistics);
 	if (ret) {
 		LOG_ERR("Failed to get stat: 0x%x", ret);
-		return -EINVAL;
+		return ERROR_CODE_CHECK(ret);
 	}
 
 	stats->multicast.rx = statistics.mcast_rx_count;

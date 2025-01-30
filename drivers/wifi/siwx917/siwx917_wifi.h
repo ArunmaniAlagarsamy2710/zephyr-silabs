@@ -15,6 +15,17 @@
 #include "sl_si91x_protocol_types.h"
 
 #define GET_INTERFACE (0x03)
+#define ERROR_CODE_CHECK(sdk_error)                                                                \
+	((sdk_error) == SL_STATUS_FAIL                    ? -EIO                                   \
+	 : (sdk_error) == SL_STATUS_NOT_INITIALIZED       ? -ENODEV                                \
+	 : (sdk_error) == SL_STATUS_NOT_SUPPORTED         ? -ENOTSUP                               \
+	 : (sdk_error) == SL_STATUS_WIFI_INTERFACE_NOT_UP ? -ENETDOWN                              \
+	 : (sdk_error) == SL_STATUS_INVALID_PARAMETER     ? -EINVAL                                \
+	 : (sdk_error) == SL_STATUS_INVALID_INDEX         ? -EINVAL                                \
+	 : (sdk_error) == SL_STATUS_ALLOCATION_FAILED     ? -ENOMEM                                \
+	 : (sdk_error) == SL_STATUS_NOT_AVAILABLE                                                  \
+		 ? -EBUSY                                                                          \
+		 : -EIO) /* Default mapping to EIO for unknown errors */
 
 struct siwx917_dev {
 	struct net_if *iface;
