@@ -28,6 +28,27 @@ typedef struct {
 	int z_value;
 } wifi_rate_entry_t;
 
+static inline int siwx917_get_mode(uint8_t mode, sl_wifi_interface_t iface)
+{
+	switch (mode) {
+	case WIFI_STA_MODE:
+		if (FIELD_GET(SL_WIFI_CLIENT_INTERFACE, iface)) {
+			return -EALREADY;
+		}
+
+		return SL_SI91X_CLIENT_MODE;
+	case WIFI_AP_MODE:
+		if (FIELD_GET(SL_WIFI_AP_INTERFACE, iface)) {
+			return -EALREADY;
+		}
+
+		return SL_SI91X_ACCESS_POINT_MODE;
+	default:
+		LOG_ERR("Invalid mode");
+		return -EINVAL;
+	}
+}
+
 static inline int siwx917_bandwidth(enum wifi_frequency_bandwidths bandwidth)
 {
 
@@ -673,6 +694,71 @@ static int siwx917_stats(const struct device *dev, struct net_stats_wifi *stats)
 }
 #endif
 
+static int siwx917_mode(const struct device *dev, struct wifi_mode_info *mode)
+{
+	struct siwx917_dev *sidev = dev->data;
+	int device_mode;
+
+	/*TODO NULL check */
+	sl_wifi_device_configuration_t network_config = {
+		.boot_option = LOAD_NWP_FW,
+		.band = SL_SI91X_WIFI_BAND_2_4GHZ,
+		.region_code = DEFAULT_REGION,
+		.boot_config = {
+			.tcp_ip_feature_bit_map = SL_SI91X_TCP_IP_FEAT_EXTENSION_VALID,
+			.ext_tcp_ip_feature_bit_map = SL_SI91X_CONFIG_FEAT_EXTENSION_VALID,
+			.config_feature_bit_map = SL_SI91X_ENABLE_ENHANCED_MAX_PSP,
+			.custom_feature_bit_map = SL_SI91X_CUSTOM_FEAT_EXTENSION_VALID,
+			.ext_custom_feature_bit_map =
+				MEMORY_CONFIG |
+				SL_SI91X_EXT_FEAT_XTAL_CLK |
+				SL_SI91X_EXT_FEAT_FRONT_END_SWITCH_PINS_ULP_GPIO_4_5_0,
+		}
+	};
+
+	sl_si91x_boot_configuration_t *cfg = &network_config.boot_config;
+
+	if (IS_ENABLED(CONFIG_BT_SIWX917)) {
+		cfg->coex_mode = SL_SI91X_WLAN_BLE_MODE;
+	} else {
+		cfg->coex_mode = SL_SI91X_WLAN_ONLY_MODE;
+	}
+
+	cfg->feature_bit_map |= SL_SI91X_FEAT_SECURITY_OPEN | SL_SI91X_FEAT_WPS_DISABLE,
+	cfg->ext_custom_feature_bit_map |= SL_SI91X_EXT_FEAT_IEEE_80211W;
+	if (IS_ENABLED(CONFIG_WIFI_SIWX917_NET_STACK_OFFLOAD)) {
+		cfg->ext_tcp_ip_feature_bit_map |= SL_SI91X_EXT_TCP_IP_WINDOW_SCALING;
+		cfg->ext_tcp_ip_feature_bit_map |= SL_SI91X_EXT_TCP_IP_TOTAL_SELECTS(10);
+		cfg->tcp_ip_feature_bit_map |= SL_SI91X_TCP_IP_FEAT_ICMP;
+		if (IS_ENABLED(CONFIG_NET_IPV6)) {
+			cfg->tcp_ip_feature_bit_map |= SL_SI91X_TCP_IP_FEAT_DHCPV6_CLIENT;
+			cfg->tcp_ip_feature_bit_map |= SL_SI91X_TCP_IP_FEAT_IPV6;
+		}
+		if (IS_ENABLED(CONFIG_NET_IPV4)) {
+			cfg->tcp_ip_feature_bit_map |= SL_SI91X_TCP_IP_FEAT_DHCPV4_CLIENT;
+		}
+	} else {
+		cfg->tcp_ip_feature_bit_map |= SL_SI91X_TCP_IP_FEAT_BYPASS;
+	}
+
+	device_mode = siwx917_get_mode(mode->mode, sidev->interface);
+	if (device_mode < 0) {
+		return device_mode;
+	}
+
+	network_config.boot_config.oper_mode = device_mode;
+
+	sl_wifi_deinit();
+
+	sl_wifi_init(&network_config, NULL, sl_wifi_default_event_handler);
+
+	sidev->interface = sl_wifi_get_default_interface();
+
+	sidev->state = WIFI_STATE_INACTIVE;
+
+	return 0;
+}
+
 static void siwx917_iface_init(struct net_if *iface)
 {
 	struct siwx917_dev *sidev = iface->if_dev->dev->data;
@@ -716,6 +802,7 @@ static const struct wifi_mgmt_ops siwx917_mgmt = {
 	.ap_disable   = siwx917_ap_disable,
 	.ap_sta_disconnect = siwx917_ap_sta_disconnect,
 	.iface_status = siwx917_status,
+	.mode         = siwx917_mode,
 #if defined(CONFIG_NET_STATISTICS_WIFI)
 	.get_stats = siwx917_stats,
 #endif
